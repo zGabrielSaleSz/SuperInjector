@@ -10,8 +10,8 @@ namespace SuperInjectorTests
     {
         [Fact]
         public void Should_UseSameInstance_When_Singleton()
-        { 
-            IContainer container = SuperInjectorManager.GetContainer();
+        {
+            IContainer container = new Container();
             container.AddSingleton<IBakeryContext, BakeryContext>();
             container.AddSingleton<IIceCream, Kibon>();
             container.AddSingleton<IBakery, SuperBakery>();
@@ -26,7 +26,7 @@ namespace SuperInjectorTests
         [Fact]
         public void Should_CreateInstance_When_Transient()
         {
-            IContainer container = SuperInjectorManager.GetContainer();
+            IContainer container = new Container();
             container.AddSingleton<IBakery, HyperBakery>();
 
             container.AddTransient<IBakeryContext, BakeryContext>();
@@ -44,7 +44,7 @@ namespace SuperInjectorTests
         [Fact]
         public void Should_KeepSingletonByType_When_MoreThanOneImplementationByInterface()
         {
-            IContainer container = SuperInjectorManager.GetContainer();
+            IContainer container = new Container();
             container.AddSingleton<IBakery, SuperBakery>();
             container.AddSingleton<IBakery, HyperBakery>();
             container.AddSingleton<IIceCream, BaccioDeLatte>();
