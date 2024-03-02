@@ -6,6 +6,8 @@ namespace SuperInjector.Core
 {
     public interface IContainer
     {
+        void AddSingleton<TInjection, TImplementation>(TImplementation instance) where TImplementation : TInjection;
+        void AddSingleton<TInjection>();
         void AddSingleton<TInjection, TImplementation>() where TImplementation : TInjection;
         void AddTransient<TInjection, TImplementation>() where TImplementation : TInjection;
         T GetInstance<T>();

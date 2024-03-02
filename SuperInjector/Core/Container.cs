@@ -17,7 +17,18 @@ namespace SuperInjector.Core
             _singletonInstances = new Dictionary<Type, object>();
             _implementationsByInjection = new Dictionary<Type, HashSet<Type>>();
             
-            AddSingleton<IContainer, Container>();
+            AddSingleton<IContainer, Container>(this);
+        }
+
+        public void AddSingleton<TInjection, TImplementation>(TImplementation instance) where TImplementation : TInjection
+        {
+            Type typeInjection = typeof(TInjection);
+            Type typeImplementation = typeof(TImplementation);
+
+            AddSingletonTypes(typeInjection, typeImplementation);
+            AddImplementation(typeInjection, typeImplementation);
+            RegisterAsSingleton(typeInjection, typeImplementation, instance);
+
         }
 
         public void AddSingleton<TInjection>()
@@ -31,7 +42,7 @@ namespace SuperInjector.Core
         {
             Type typeInjection = typeof(TInjection);
             Type typeImplementation = typeof(TImplementation);
-            _singletonTypes.Add(typeInjection);
+            AddSingletonTypes(typeInjection, typeImplementation);
             AddImplementation(typeInjection, typeImplementation);
         }
 
@@ -43,6 +54,21 @@ namespace SuperInjector.Core
         }
 
         private void AddImplementation(Type typeInjection, Type typeImplementation)
+        {
+            AddOrUpdateImplementation(typeInjection, typeImplementation);
+            AddOrUpdateImplementation(typeImplementation, typeImplementation);
+        }
+
+        private void AddSingletonTypes(Type typeInjection, Type typeImplementation)
+        {
+            _singletonTypes.Add(typeInjection);
+            if (typeInjection != typeImplementation)
+            {
+                _singletonTypes.Add(typeImplementation);
+            }
+        }
+
+        private void AddOrUpdateImplementation(Type typeInjection, Type typeImplementation)
         {
             if (_implementationsByInjection.TryGetValue(typeInjection, out HashSet<Type> existing))
             {
@@ -58,31 +84,47 @@ namespace SuperInjector.Core
         {
             List<T> response = new List<T>();
             var typeInjection = typeof(T);
-            if (_implementationsByInjection.TryGetValue(typeInjection, out HashSet<Type> implementations))
+            if (_implementationsByInjection.TryGetValue(typeInjection, out HashSet<Type> implementationsType))
             {
-                foreach (var implementation in implementations)
+                foreach (var implementationType in implementationsType)
                 {
-                    if (!BuildImplementation(typeInjection, implementation, out object resultBuilded))
+                    if (TryGetExistingInstance(implementationType, out object instance))
+                    {
+                        response.Add((T)instance);
+                    }
+                    else if (TryBuildImplementation(typeInjection, implementationType, out object resultBuilded))
+                    {
+                        response.Add((T)resultBuilded);
+                    } 
+                    else
                     {
                         throw new SuperInjectorException("Couldn't build one of the instances");
                     }
-                    response.Add((T)resultBuilded);
                 }
             }
             return response;
         }
 
+        private bool TryGetExistingInstance(Type implementationsType, out object instance)
+        {
+            return _singletonInstances.TryGetValue(implementationsType, out instance);
+        }
+
         public T GetInstance<T>()
         {
             Type typeInjection = typeof(T);
-            if (TryBuild(typeInjection, out object result))
+            if (TryGetExistingInstance(typeInjection, out object instance))
+            {
+                return (T)instance;
+            }
+            else if (TryBuildInjection(typeInjection, out object result))
             {
                 return (T)result;
             }
             throw new MissingImplementationException("");
         }
 
-        private bool TryBuild(Type typeInjection, out object result)
+        private bool TryBuildInjection(Type typeInjection, out object result)
         {
             result = null;
             if (_singletonInstances.TryGetValue(typeInjection, out object existing))
@@ -102,10 +144,10 @@ namespace SuperInjector.Core
             }
 
             Type instanceType = instancesType.FirstOrDefault();
-            return BuildImplementation(typeInjection, instanceType, out result);
+            return TryBuildImplementation(typeInjection, instanceType, out result);
         }
 
-        private bool BuildImplementation(Type typeInjection, Type instanceType, out object result)
+        private bool TryBuildImplementation(Type typeInjection, Type instanceType, out object result)
         {
             if (HasParameterlessConstructor(instanceType))
             {
@@ -120,7 +162,7 @@ namespace SuperInjector.Core
                 var constructorParameters = constructor.GetParameters();
                 foreach (var parameter in constructorParameters)
                 {
-                    if (!TryBuild(parameter.ParameterType, out object parameterBuilded))
+                    if (!TryBuildInjection(parameter.ParameterType, out object parameterBuilded))
                     {
                         parametersImplementations.Clear();
                         continue;
@@ -139,7 +181,7 @@ namespace SuperInjector.Core
                     return false;
                 }
             }
-            return TryBuild(instanceType, out result);
+            return TryBuildInjection(instanceType, out result);
         }
 
         private bool HasParameterlessConstructor(Type result)
@@ -153,42 +195,53 @@ namespace SuperInjector.Core
             if (constructorInstances.Length == 0)
             {
                 instance = Activator.CreateInstance(typeImplementation);
-            } 
+            }
             else
             {
                 instance = Activator.CreateInstance(typeImplementation, constructorInstances.ToArray());
             }
 
+            RegisterAsSingleton(typeInjection, typeImplementation, instance);
+            return instance;
+        }
+
+        private void RegisterAsSingleton(Type typeInjection, Type typeImplementation, object instance)
+        {
             if (_singletonTypes.Contains(typeInjection))
             {
-                if (!_singletonInstances.ContainsKey(typeInjection))
+                AddAsSingletonInstance(typeInjection, typeImplementation, instance);
+            }
+        }
+
+        private void AddAsSingletonInstance(Type typeInjection, Type typeImplementation, object instance)
+        {
+            if (!_singletonInstances.ContainsKey(typeInjection))
+            {
+                _singletonInstances.Add(typeInjection, instance);
+                if (typeInjection != typeImplementation)
                 {
-                    _singletonInstances.Add(typeInjection, instance);
-                } 
-                else
-                {
-                    var existingImplementationType = SwitchSingletonTypeInjectionToTypeImplementation(typeInjection);
-                    if (existingImplementationType == typeImplementation)
-                    {
-                        throw new SuperInjectorException($"You can't singletons instances of the same type {typeImplementation.FullName}");
-                    }
                     _singletonInstances.Add(typeImplementation, instance);
                 }
             }
-
-            return instance;
+            else
+            {
+                Type existingImplementationType = RemoveInjectionMapping(typeInjection);
+                if (existingImplementationType == typeImplementation)
+                {
+                    throw new SuperInjectorException($"You can't register singletons instances of the same type {typeImplementation.FullName}");
+                }
+                _singletonInstances.Add(typeImplementation, instance);
+            }
         }
 
 
         /// <param name="typeInjection"></param>
         /// <returns>returns the implementation type</returns>
-        private Type SwitchSingletonTypeInjectionToTypeImplementation(Type typeInjection)
+        private Type RemoveInjectionMapping(Type typeInjection)
         {
             var implementation = _singletonInstances[typeInjection];
             _singletonInstances.Remove(typeInjection);
-            var implementationType = implementation.GetType();
-            _singletonInstances.Add(implementationType, implementation);
-            return implementationType;
+            return implementation.GetType();
         }
     }
 }

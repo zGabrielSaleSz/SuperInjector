@@ -1,4 +1,3 @@
-using SuperInjector;
 using SuperInjector.Core;
 using SuperInjectorTests.Model;
 using SuperInjectorTests.Model.Domain;
@@ -6,7 +5,7 @@ using SuperInjectorTests.Model.Domain.Bakery;
 
 namespace SuperInjectorTests
 {
-    public class SuperInjectorTest
+    public class SuperInjectorLifetimeTest
     {
         [Fact]
         public void Should_UseSameInstance_When_Singleton()
@@ -68,6 +67,61 @@ namespace SuperInjectorTests
 
             Assert.Equal(superBakeryFromImplementation, superBakeryFromGetInstances);
             Assert.Equal(hyperBakeryFromImplementation, hyperBakeryFromGetInstances);
+        }
+
+        [Fact]
+        public void Should_InjectContainer_When_AnyInstanceRequiresContainerAsDependency()
+        {
+            IContainer container = new Container();
+
+            container.AddSingleton<IBakery, SuperBakery>();
+            container.AddSingleton<IBakery, HyperBakery>();
+            container.AddSingleton<IIceCream, BaccioDeLatte>();
+            container.AddTransient<IBakeryContext, BakeryContext>();
+            container.AddSingleton<DependencyInjectionManager>();
+
+            DependencyInjectionManager instance = container.GetInstance<DependencyInjectionManager>();
+            instance.TurnOnBakeriesLights();
+
+            var instances = container.GetInstances<IBakery>();
+            Assert.True(instances.All(l => l.LightOn == true));
+        }
+
+        [Fact]
+        public void Should_AllowRegistration_After_AnyGetInstancesMethod()
+        {
+            IContainer container = new Container();
+            container.AddTransient<IBakeryContext, BakeryContext>();
+            container.AddSingleton<IIceCream, BaccioDeLatte>();
+
+            var baccioDeLatte = container.GetInstance<IIceCream>();
+            var baccioPrice = baccioDeLatte.GetPrice();
+            var rating = baccioDeLatte.GetRating();
+
+            container.AddSingleton<IBakery, SuperBakery>();
+
+            var bakery = container.GetInstance<IBakery>();
+            Assert.Equal(bakery.GetIceCream(), baccioDeLatte); 
+        }
+
+        [Fact]
+        public void Should_ResolveInstance_When_UsingImplementationType()
+        {
+            IContainer container = new Container();
+            container.AddTransient<IBakeryContext, BakeryContext>();
+            container.AddSingleton<IIceCream, BaccioDeLatte>();
+
+            var baccioDeLatte = container.GetInstance<IIceCream>();
+            var baccioPrice = baccioDeLatte.GetPrice();
+            var rating = baccioDeLatte.GetRating();
+
+            container.AddSingleton<IBakery, SuperBakery>();
+
+            var bakeryInjection = container.GetInstance<IBakery>();
+            var bakery = container.GetInstance<SuperBakery>();
+
+            Assert.Equal(bakery.GetIceCream(), baccioDeLatte);
+            Assert.Equal(bakeryInjection, bakery);
         }
     }
 }

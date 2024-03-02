@@ -4,6 +4,8 @@ namespace SuperInjectorTests.Model
 {
     public class SuperBakery : IBakery
     {
+        public bool LightOn { get; private set; }
+
         private readonly IIceCream _iceCream;
         private readonly IBakeryContext _bakeryContext;
 
@@ -21,6 +23,11 @@ namespace SuperInjectorTests.Model
         public IIceCream GetIceCream()
         {
             return _iceCream;
+        }
+
+        public void TurnLightsOn()
+        {
+            LightOn = true;
         }
     }
 }
