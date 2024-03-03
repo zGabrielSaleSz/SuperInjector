@@ -1,6 +1,7 @@
 ﻿using SuperInjector.Domain;
 using SuperInjector.Exceptions;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -38,12 +39,25 @@ namespace SuperInjector.Core
                 var constructorParameters = constructor.GetParameters();
                 foreach (var parameter in constructorParameters)
                 {
-                    if (!TryBuildInjection(parameter.ParameterType, out object parameterBuilded))
+                    if (IsEnumerable(parameter.ParameterType))
                     {
-                        parametersImplementations.Clear();
-                        continue;
+                        var enumerableType = GetGenericIEnumerables(parameter.ParameterType);
+                        if (enumerableType.Count() != 1)
+                        {
+                            throw new SuperInjectorException($"Couldn't resolve type {parameter.ParameterType.FullName} on injection of {instanceType.FullName}");
+                        }
+                        object parameterBuilded = BuildEnumerableInjection(enumerableType.First().UnderlyingSystemType);
+                        parametersImplementations.Add(parameterBuilded);
                     }
-                    parametersImplementations.Add(parameterBuilded);
+                    else
+                    {
+                        if (!TryBuildSingleInjection(parameter.ParameterType, out object parameterBuilded))
+                        {
+                            parametersImplementations.Clear();
+                            continue;
+                        }
+                        parametersImplementations.Add(parameterBuilded);
+                    }
                 }
 
                 if (constructorParameters.Length == parametersImplementations.Count)
@@ -57,34 +71,50 @@ namespace SuperInjector.Core
                     return false;
                 }
             }
-            return TryBuildInjection(instanceType, out result);
+            return TryBuildSingleInjection(instanceType, out result);
         }
 
-        private bool TryBuildInjection(Type typeInjection, out object result)
+        public IList CreateGenericList(Type listType)
+        {
+            Type genericListType = typeof(List<>).MakeGenericType(listType);
+            return (IList)Activator.CreateInstance(genericListType);
+        }
+
+        private bool TryBuildSingleInjection(Type typeInjection, out object result)
         {
             result = null;
-            IEnumerable<InjectionInstance> existing = _context.GetInstancessByType(typeInjection);
-            if (existing.Count() == 1)
+            var enumerableInjection = (IList)BuildEnumerableInjection(typeInjection);
+            if (enumerableInjection.Count == 1)
             {
-                InjectionInstance item = existing.FirstOrDefault();
-                if (!item.IsBuilded)
-                {
-                    if (TryBuildImplementation(item.ImplementationType, out var newInstance))
-                    {
-                        if (item.IsSingleton)
-                        {
-                            item.Instance = newInstance;
-                        }
-                        result = newInstance;
-                        return true;
-                    }
-                    return false;
-                } 
-
-                result = item.Instance;
+                result = enumerableInjection[0];
                 return true;
             }
             return false;
+        }
+
+        private object BuildEnumerableInjection(Type typeInjection)
+        {
+            IEnumerable<InjectionInstance> existing = _context.GetInstancessByType(typeInjection);
+            IList enumerableResult = CreateGenericList(typeInjection);
+            foreach (var instance in existing)
+            {
+                if (!instance.IsBuilded)
+                {
+                    if (TryBuildImplementation(instance.ImplementationType, out var newInstance))
+                    {
+                        if (instance.IsSingleton)
+                        {
+                            instance.Instance = newInstance;
+                        }
+                        enumerableResult.Add(newInstance);
+                    }
+                } 
+                else
+                {
+                    enumerableResult.Add(instance.Instance);
+                }
+            }
+            return enumerableResult;
         }
 
         private bool HasParameterlessConstructor(Type result)
@@ -104,6 +134,16 @@ namespace SuperInjector.Core
                 instance = Activator.CreateInstance(typeImplementation, constructorInstances.ToArray());
             }
             return instance;
+        }
+
+        private bool IsEnumerable(Type type)
+        {
+            return type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
+        }
+
+        public IEnumerable<Type> GetGenericIEnumerables(Type enumerableType)
+        {
+            return enumerableType.GetGenericArguments();
         }
     }
 }

@@ -78,9 +78,28 @@ namespace SuperInjectorTests
             container.AddSingleton<IBakery, HyperBakery>();
             container.AddSingleton<IIceCream, BaccioDeLatte>();
             container.AddTransient<IBakeryContext, BakeryContext>();
-            container.AddSingleton<DependencyInjectionManager>();
+            container.AddSingleton<ContainerAsDependency>();
 
-            DependencyInjectionManager instance = container.GetInstance<DependencyInjectionManager>();
+            ContainerAsDependency instance = container.GetInstance<ContainerAsDependency>();
+            instance.TurnOnBakeriesLights();
+
+            var instances = container.GetInstances<IBakery>();
+            Assert.True(instances.All(l => l.LightOn == true));
+        }
+
+
+        [Fact]
+        public void Should_InjectDependencies_When_AnyInstanceRequiresIEnumerableAsDependency()
+        {
+            IContainer container = new Container();
+
+            container.AddSingleton<IBakery, SuperBakery>();
+            container.AddSingleton<IBakery, HyperBakery>();
+            container.AddSingleton<IIceCream, BaccioDeLatte>();
+            container.AddTransient<IBakeryContext, BakeryContext>();
+            container.AddSingleton<EnumerableAsDependency>();
+
+            EnumerableAsDependency instance = container.GetInstance<EnumerableAsDependency>();
             instance.TurnOnBakeriesLights();
 
             var instances = container.GetInstances<IBakery>();

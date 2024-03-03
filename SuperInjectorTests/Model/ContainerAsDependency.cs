@@ -2,11 +2,11 @@
 
 namespace SuperInjectorTests.Model
 {
-    public class DependencyInjectionManager
+    public class ContainerAsDependency
     {
         private readonly IContainer _container;
 
-        public DependencyInjectionManager(IContainer container)
+        public ContainerAsDependency(IContainer container)
         {
             _container = container;
         }
