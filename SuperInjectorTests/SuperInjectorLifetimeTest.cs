@@ -117,8 +117,8 @@ namespace SuperInjectorTests
 
             container.AddSingleton<IBakery, SuperBakery>();
 
-            var bakeryInjection = container.GetInstance<IBakery>();
             var bakery = container.GetInstance<SuperBakery>();
+            var bakeryInjection = container.GetInstance<IBakery>();
 
             Assert.Equal(bakery.GetIceCream(), baccioDeLatte);
             Assert.Equal(bakeryInjection, bakery);
