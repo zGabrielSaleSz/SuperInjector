@@ -9,7 +9,7 @@ namespace SuperInjector.Exceptions
     {
         private string _message;
         public CrossDependencyException(IEnumerable<string> dependencyStack) {
-            _message = string.Concat("Detected cross dependency, sequence of denpendency -> ", string.Join("->", dependencyStack), ".");
+            _message = string.Concat("Detected cross dependency, sequence of dependency:\r\n ", string.Join("\r\n -> ", dependencyStack), ".");
         }
 
         public override string Message => _message; 
