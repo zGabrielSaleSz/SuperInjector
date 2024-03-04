@@ -17,20 +17,26 @@ namespace SuperInjector.Core
 
         public object BuildInstance(Type type)
         {
-            if (TryBuildImplementation(type, out var result))
+            if (TryBuildImplementation(type, out var result, new List<string>()))
             {
                 return result;
             }
             throw new SuperInjectorException($"Couldn't create instance of {type.FullName}");
         }
 
-        private bool TryBuildImplementation(Type instanceType, out object result)
+        private bool TryBuildImplementation(Type instanceType, out object result, List<string> dependencyStack)
         {
             if (HasParameterlessConstructor(instanceType))
             {
                 result = Build(instanceType);
                 return true;
             }
+
+            if (dependencyStack.Contains(instanceType.FullName))
+            {
+                throw new CrossDependencyException(dependencyStack);
+            }
+            dependencyStack.Add(instanceType.FullName);
             List<object> parametersImplementations = new List<object>();
             var constructors = instanceType.GetConstructors();
             foreach (var constructor in constructors)
@@ -46,12 +52,12 @@ namespace SuperInjector.Core
                         {
                             throw new SuperInjectorException($"Couldn't resolve type {parameter.ParameterType.FullName} on injection of {instanceType.FullName}");
                         }
-                        object parameterBuilded = BuildEnumerableInjection(enumerableType.First().UnderlyingSystemType);
+                        object parameterBuilded = BuildEnumerableInjection(enumerableType.First().UnderlyingSystemType, dependencyStack);
                         parametersImplementations.Add(parameterBuilded);
                     }
                     else
                     {
-                        if (!TryBuildSingleInjection(parameter.ParameterType, out object parameterBuilded))
+                        if (!TryBuildSingleInjection(parameter.ParameterType, out object parameterBuilded, dependencyStack))
                         {
                             parametersImplementations.Clear();
                             continue;
@@ -71,7 +77,7 @@ namespace SuperInjector.Core
                     return false;
                 }
             }
-            return TryBuildSingleInjection(instanceType, out result);
+            return TryBuildSingleInjection(instanceType, out result, dependencyStack);
         }
 
         public IList CreateGenericList(Type listType)
@@ -80,10 +86,10 @@ namespace SuperInjector.Core
             return (IList)Activator.CreateInstance(genericListType);
         }
 
-        private bool TryBuildSingleInjection(Type typeInjection, out object result)
+        private bool TryBuildSingleInjection(Type typeInjection, out object result, List<string> dependencyStack)
         {
             result = null;
-            var enumerableInjection = (IList)BuildEnumerableInjection(typeInjection);
+            var enumerableInjection = (IList)BuildEnumerableInjection(typeInjection, dependencyStack);
             if (enumerableInjection.Count == 1)
             {
                 result = enumerableInjection[0];
@@ -92,7 +98,7 @@ namespace SuperInjector.Core
             return false;
         }
 
-        private object BuildEnumerableInjection(Type typeInjection)
+        private object BuildEnumerableInjection(Type typeInjection, List<string> dependencyStack)
         {
             IEnumerable<InjectionInstance> existing = _context.GetInstancessByType(typeInjection);
             IList enumerableResult = CreateGenericList(typeInjection);
@@ -100,7 +106,7 @@ namespace SuperInjector.Core
             {
                 if (!instance.IsBuilded)
                 {
-                    if (TryBuildImplementation(instance.ImplementationType, out var newInstance))
+                    if (TryBuildImplementation(instance.ImplementationType, out var newInstance, dependencyStack))
                     {
                         if (instance.IsSingleton)
                         {

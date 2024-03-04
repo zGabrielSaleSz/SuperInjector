@@ -1,7 +1,9 @@
 using SuperInjector.Core;
+using SuperInjector.Exceptions;
 using SuperInjectorTests.Model;
 using SuperInjectorTests.Model.Domain;
 using SuperInjectorTests.Model.Domain.Bakery;
+using SuperInjectorTests.Model.Interface;
 
 namespace SuperInjectorTests
 {
@@ -141,6 +143,22 @@ namespace SuperInjectorTests
 
             Assert.Equal(bakery.GetIceCream(), baccioDeLatte);
             Assert.Equal(bakeryInjection, bakery);
+        }
+
+        [Fact]
+        public void Should_Break_When_UsingCrossDependency()
+        {
+            IContainer container = new Container();
+
+            container.AddSingleton<ICrossDependencyAlfa, CrossDependencyAlfa>();
+            container.AddSingleton<ICrossDependencyBeta, CrossDependencyBeta>();
+
+            var exception = Assert.Throws<CrossDependencyException>(() =>
+            {
+                var notGonnaWork = container.GetInstance<CrossDependencyAlfa>();
+
+            });
+            Console.WriteLine(exception.Message);
         }
     }
 }

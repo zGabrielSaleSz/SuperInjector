@@ -91,7 +91,7 @@ namespace SuperInjector.Core
             {
                 injectionInstance.Instance = newInstance;
             }
-            return injectionInstance.Instance;
+            return newInstance;
         }
     }
 }
